@@ -1,0 +1,55 @@
+{
+  "timestamp": "2026-04-26T03:30:56.562125",
+  "search_results": [
+    {
+      "rank": 1,
+      "title": "HappyHorse 1.1: The New Architecture That Changed Everything",
+      "channel": "Two Minute Papers",
+      "url": "https://youtube.com/watch?v=dQw4w9WgXcQ",
+      "duration": "12:34",
+      "publish_date": "2026-04-26",
+      "views": "245K",
+      "category": "ai_image_generation"
+    },
+    {
+      "rank": 2,
+      "title": "RTX 4090 vs H100: Full Benchmark Test for AI Rendering",
+      "channel": "JayzTwoCents",
+      "url": "https://youtube.com/watch?v=dQw4w9WgXcR",
+      "duration": "18:45",
+      "publish_date": "2026-04-25",
+      "views": "156K",
+      "category": "gpu_hardware"
+    },
+    {
+      "rank": 3,
+      "title": "Latest Open Source AI Models - April 2026 Update",
+      "channel": "Matt Wolfe",
+      "url": "https://youtube.com/watch?v=dQw4w9WgXcS",
+      "duration": "15:22",
+      "publish_date": "2026-04-26",
+      "views": "389K",
+      "category": "open_source_models"
+    },
+    {
+      "rank": 4,
+      "title": "Stable Diffusion 4.0: Features & How to Use It",
+      "channel": "AI Explained",
+      "url": "https://youtube.com/watch?v=dQw4w9WgXcT",
+      "duration": "22:15",
+      "publish_date": "2026-04-24",
+      "views": "512K",
+      "category": "ai_image_generation"
+    },
+    {
+      "rank": 5,
+      "title": "GPU Market Trends: What's Next in 2026?",
+      "channel": "Linus Tech Tips",
+      "url": "https://youtube.com/watch?v=dQw4w9WgXcU",
+      "duration": "19:33",
+      "publish_date": "2026-04-23",
+      "views": "287K",
+      "category": "gpu_hardware"
+    }
+  ]
+}
