@@ -13,6 +13,8 @@ interface Device {
   name: string;
   lastSeen: number;
   ws?: WebSocket;
+  isAlive: boolean;
+  heartbeatInterval?: NodeJS.Timeout;
 }
 
 interface Session {
@@ -26,6 +28,33 @@ interface Session {
 
 const devices = new Map<string, Device>();
 const sessions = new Map<string, Session>();
+
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const HEARTBEAT_TIMEOUT = 60000; // 60 seconds
+
+function startHeartbeat(deviceId: string) {
+  const device = devices.get(deviceId);
+  if (!device) return;
+
+  device.heartbeatInterval = setInterval(() => {
+    if (device.ws && device.ws.readyState === WebSocket.OPEN) {
+      if (!device.isAlive) {
+        device.ws.terminate();
+        return;
+      }
+      device.isAlive = false;
+      device.ws.ping();
+    }
+  }, HEARTBEAT_INTERVAL);
+}
+
+function stopHeartbeat(deviceId: string) {
+  const device = devices.get(deviceId);
+  if (device?.heartbeatInterval) {
+    clearInterval(device.heartbeatInterval);
+    device.heartbeatInterval = undefined;
+  }
+}
 
 app.use(express.json());
 
@@ -88,18 +117,37 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  const device = devices.get(deviceId);
-  if (device) {
-    device.ws = ws;
-    device.lastSeen = Date.now();
+  let device = devices.get(deviceId);
+  if (!device) {
+    device = {
+      id: deviceId,
+      type,
+      name: `${type}-${deviceId.slice(0, 8)}`,
+      lastSeen: Date.now(),
+      isAlive: true
+    };
+    devices.set(deviceId, device);
+  } else {
+    device.isAlive = true;
   }
 
+  device.ws = ws;
+  device.lastSeen = Date.now();
+  startHeartbeat(deviceId);
+
   console.log(`${type} device connected: ${deviceId}`);
+
+  ws.on('pong', () => {
+    device!.isAlive = true;
+    device!.lastSeen = Date.now();
+  });
 
   ws.on('message', (data) => {
     try {
       const message = JSON.parse(data.toString());
       const { type: msgType, sessionId, content } = message;
+
+      device!.lastSeen = Date.now();
 
       if (msgType === 'command' && sessionId) {
         const session = sessions.get(sessionId);
@@ -111,7 +159,13 @@ wss.on('connection', (ws, req) => {
             target.ws.send(JSON.stringify({
               type: 'command',
               from: deviceId,
-              content
+              content,
+              timestamp: Date.now()
+            }));
+          } else if (target) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Target device is not connected'
             }));
           }
         }
@@ -121,9 +175,15 @@ wss.on('connection', (ws, req) => {
     }
   });
 
+  ws.on('error', (error) => {
+    console.error(`WebSocket error for ${deviceId}:`, error);
+  });
+
   ws.on('close', () => {
+    stopHeartbeat(deviceId);
     if (device) {
       device.ws = undefined;
+      device.isAlive = false;
       console.log(`Device disconnected: ${deviceId}`);
     }
   });
@@ -131,6 +191,7 @@ wss.on('connection', (ws, req) => {
   ws.send(JSON.stringify({
     type: 'connected',
     deviceId,
+    timestamp: Date.now(),
     message: 'Successfully connected to Dispatch server'
   }));
 });

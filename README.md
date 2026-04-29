@@ -72,3 +72,19 @@ node dist/example.js  # Terminal 2: Run demo
 - **Desktop Client**: Connects as 'desktop' type device
 - **Mobile Client**: Connects as 'mobile' type device
 - **Session**: Links desktop and mobile for secure communication
+
+## Connection Stability Features
+
+✓ **Heartbeat Monitoring**: Server sends periodic ping/pong to detect dead connections
+✓ **Automatic Reconnection**: Exponential backoff reconnection strategy (3s, 4.5s, 6.75s...)
+✓ **Connection State Tracking**: Monitors last seen time and connection status
+✓ **Error Recovery**: Graceful handling of network failures and timeouts
+✓ **Message Timestamps**: Includes timestamps for message ordering
+✓ **Connection Status Feedback**: Device status visible through heartbeat mechanism
+
+## How to Ensure Continuous Connection
+
+1. **Server-side Monitoring**: Server sends ping every 30 seconds, terminates stale connections after 60 seconds
+2. **Client-side Recovery**: Automatic reconnection with exponential backoff (max 10 attempts)
+3. **Network Resilience**: Both desktop and mobile support graceful disconnection/reconnection
+4. **Real-time Status**: Connection status is continuously monitored and reported

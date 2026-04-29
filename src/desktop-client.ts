@@ -7,6 +7,10 @@ class DesktopDispatchClient {
   private serverUrl: string;
   private ws?: WebSocket;
   private sessionId?: string;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 10;
+  private reconnectDelay = 3000;
+  private isConnecting = false;
 
   constructor(serverUrl: string = 'ws://localhost:3000') {
     this.deviceId = uuidv4();
@@ -49,38 +53,71 @@ class DesktopDispatchClient {
     }
   }
 
-  async connect() {
+  async connect(): Promise<void> {
+    if (this.isConnecting) return;
+    this.isConnecting = true;
+
     return new Promise<void>((resolve, reject) => {
-      try {
-        const wsUrl = `${this.serverUrl}?deviceId=${this.deviceId}&type=desktop`;
-        this.ws = new WebSocket(wsUrl);
+      const attemptConnection = () => {
+        try {
+          const wsUrl = `${this.serverUrl}?deviceId=${this.deviceId}&type=desktop`;
+          this.ws = new WebSocket(wsUrl);
 
-        this.ws.on('open', () => {
-          console.log('Connected to Dispatch server');
-          resolve();
-        });
+          const timeout = setTimeout(() => {
+            this.ws?.terminate();
+          }, 10000);
 
-        this.ws.on('message', (data) => {
-          try {
-            const message = JSON.parse(data.toString());
-            this.handleMessage(message);
-          } catch (e) {
-            console.error('Error parsing message:', e);
-          }
-        });
+          this.ws.on('open', () => {
+            clearTimeout(timeout);
+            console.log('✓ Connected to Dispatch server');
+            this.reconnectAttempts = 0;
+            this.isConnecting = false;
+            resolve();
+          });
 
-        this.ws.on('error', (error) => {
-          console.error('WebSocket error:', error);
+          this.ws.on('message', (data) => {
+            try {
+              const message = JSON.parse(data.toString());
+              this.handleMessage(message);
+            } catch (e) {
+              console.error('Error parsing message:', e);
+            }
+          });
+
+          this.ws.on('error', (error) => {
+            clearTimeout(timeout);
+            console.error('WebSocket error:', error);
+          });
+
+          this.ws.on('close', () => {
+            clearTimeout(timeout);
+            console.log('✗ Disconnected from Dispatch server');
+            this.isConnecting = false;
+            this.attemptReconnect();
+          });
+        } catch (error) {
+          this.isConnecting = false;
           reject(error);
-        });
+        }
+      };
 
-        this.ws.on('close', () => {
-          console.log('Disconnected from Dispatch server');
-        });
-      } catch (error) {
-        reject(error);
-      }
+      attemptConnection();
     });
+  }
+
+  private attemptReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('Max reconnection attempts reached');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
+    console.log(`Reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
+    setTimeout(() => {
+      this.connect().catch(console.error);
+    }, delay);
   }
 
   private handleMessage(message: Record<string, unknown>) {
