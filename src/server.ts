@@ -2,7 +2,7 @@ import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
-import { saveSession, loadSession, getAllSessions, queueMessage, flushQueue } from './session-manager';
+import { saveMemory, loadMemory, getAllMemories, queueMessage, flushQueue } from './session-manager';
 
 const app = express();
 const server = createServer(app);
@@ -126,7 +126,7 @@ app.post('/api/sessions/pair', (req: any, res: any) => {
   const desktop = devices.get(session.desktopId);
   const mobile = devices.get(mobileId);
 
-  saveSession({
+  saveMemory({
     sessionId: session.id,
     desktopId: session.desktopId,
     mobileId: session.mobileId,
