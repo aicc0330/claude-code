@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "ts-node src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "local-api": "ts-node src/local-api-server.ts",
+    "plan-a": "npm run build && npm run local-api"
   },
   "dependencies": {
     "dotenv": "^16.0.3",
