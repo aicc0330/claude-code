@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-29T04:09:39.619602",
-  "top_stories": [
+  "timestamp": "2026-04-29T04:09:39.619072",
+  "stories": [
     {
       "title": "Claude 3.5 Sonnet: 性能提升 40%，成本降低 80%",
       "url": "https://www.anthropic.com",
@@ -23,5 +23,5 @@
       "timestamp": "2026-04-29T04:09:39.618075"
     }
   ],
-  "total_stories": 3
+  "count": 3
 }
