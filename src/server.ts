@@ -15,6 +15,9 @@ interface Device {
   ws?: WebSocket;
   isAlive: boolean;
   heartbeatInterval?: NodeJS.Timeout;
+  userAgent?: string;
+  ipAddress?: string;
+  detectedAt: number;
 }
 
 interface Session {
@@ -32,6 +35,13 @@ const sessions = new Map<string, Session>();
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 const HEARTBEAT_TIMEOUT = 60000; // 60 seconds
 
+function detectDeviceType(userAgent?: string): 'mobile' | 'desktop' {
+  if (!userAgent) return 'desktop';
+  const ua = userAgent.toLowerCase();
+  const mobilePatterns = /iphone|ipad|ipod|android|webos|blackberry|windows phone|opera mini/;
+  return mobilePatterns.test(ua) ? 'mobile' : 'desktop';
+}
+
 function startHeartbeat(deviceId: string) {
   const device = devices.get(deviceId);
   if (!device) return;
@@ -39,6 +49,7 @@ function startHeartbeat(deviceId: string) {
   device.heartbeatInterval = setInterval(() => {
     if (device.ws && device.ws.readyState === WebSocket.OPEN) {
       if (!device.isAlive) {
+        console.log(`Terminating unresponsive device: ${deviceId}`);
         device.ws.terminate();
         return;
       }
@@ -46,6 +57,13 @@ function startHeartbeat(deviceId: string) {
       device.ws.ping();
     }
   }, HEARTBEAT_INTERVAL);
+
+  setTimeout(() => {
+    if (device && !device.isAlive && device.ws && device.ws.readyState === WebSocket.OPEN) {
+      console.log(`Force terminating unresponsive device: ${deviceId}`);
+      device.ws.terminate();
+    }
+  }, HEARTBEAT_TIMEOUT);
 }
 
 function stopHeartbeat(deviceId: string) {
@@ -58,7 +76,7 @@ function stopHeartbeat(deviceId: string) {
 
 app.use(express.json());
 
-app.post('/api/register', (req, res) => {
+app.post('/api/register', (req: any, res: any) => {
   const { type, name } = req.body;
   const deviceId = uuidv4();
 
@@ -66,13 +84,15 @@ app.post('/api/register', (req, res) => {
     id: deviceId,
     type,
     name,
-    lastSeen: Date.now()
+    lastSeen: Date.now(),
+    isAlive: true,
+    detectedAt: Date.now()
   });
 
   res.json({ deviceId, message: `Device ${name} registered as ${type}` });
 });
 
-app.post('/api/sessions/create', (req, res) => {
+app.post('/api/sessions/create', (req: any, res: any) => {
   const { desktopId } = req.body;
   const sessionId = uuidv4();
   const pairingCode = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -88,7 +108,7 @@ app.post('/api/sessions/create', (req, res) => {
   res.json({ sessionId, pairingCode });
 });
 
-app.post('/api/sessions/pair', (req, res) => {
+app.post('/api/sessions/pair', (req: any, res: any) => {
   const { sessionId, pairingCode, mobileId } = req.body;
   const session = sessions.get(sessionId);
 
@@ -107,10 +127,12 @@ app.post('/api/sessions/pair', (req, res) => {
   });
 });
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', (ws: WebSocket, req: any) => {
   const url = new URL(req.url || '', `http://${req.headers.host}`);
   const deviceId = url.searchParams.get('deviceId');
-  const type = url.searchParams.get('type') as 'desktop' | 'mobile';
+  const passedType = url.searchParams.get('type') as 'desktop' | 'mobile' | null;
+  const userAgent = req.headers['user-agent'];
+  const ipAddress = req.socket.remoteAddress;
 
   if (!deviceId) {
     ws.close(1000, 'Missing deviceId');
@@ -118,31 +140,41 @@ wss.on('connection', (ws, req) => {
   }
 
   let device = devices.get(deviceId);
+  const detectedType = passedType || detectDeviceType(userAgent);
+
   if (!device) {
     device = {
       id: deviceId,
-      type,
-      name: `${type}-${deviceId.slice(0, 8)}`,
+      type: detectedType,
+      name: `${detectedType}-${deviceId.slice(0, 8)}`,
       lastSeen: Date.now(),
-      isAlive: true
+      isAlive: true,
+      userAgent,
+      ipAddress,
+      detectedAt: Date.now()
     };
     devices.set(deviceId, device);
   } else {
     device.isAlive = true;
+    device.userAgent = userAgent;
+    device.ipAddress = ipAddress;
+    if (!device.type || device.type === 'desktop') {
+      device.type = detectedType;
+    }
   }
 
   device.ws = ws;
   device.lastSeen = Date.now();
   startHeartbeat(deviceId);
 
-  console.log(`${type} device connected: ${deviceId}`);
+  console.log(`${device.type} device connected: ${deviceId} (${ipAddress})`);
 
   ws.on('pong', () => {
     device!.isAlive = true;
     device!.lastSeen = Date.now();
   });
 
-  ws.on('message', (data) => {
+  ws.on('message', (data: any) => {
     try {
       const message = JSON.parse(data.toString());
       const { type: msgType, sessionId, content } = message;
@@ -152,20 +184,23 @@ wss.on('connection', (ws, req) => {
       if (msgType === 'command' && sessionId) {
         const session = sessions.get(sessionId);
         if (session) {
-          const targetId = type === 'mobile' ? session.desktopId : session.mobileId;
+          const targetId = device!.type === 'mobile' ? session.desktopId : session.mobileId;
           const target = targetId ? devices.get(targetId) : null;
 
           if (target?.ws && target.ws.readyState === WebSocket.OPEN) {
             target.ws.send(JSON.stringify({
               type: 'command',
               from: deviceId,
+              fromDeviceType: device!.type,
+              fromName: device!.name,
               content,
               timestamp: Date.now()
             }));
           } else if (target) {
             ws.send(JSON.stringify({
               type: 'error',
-              message: 'Target device is not connected'
+              message: 'Target device is not connected',
+              targetDeviceType: device!.type === 'mobile' ? 'desktop' : 'mobile'
             }));
           }
         }
@@ -175,7 +210,7 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  ws.on('error', (error) => {
+  ws.on('error', (error: any) => {
     console.error(`WebSocket error for ${deviceId}:`, error);
   });
 

@@ -11,10 +11,13 @@ class MobileDispatchClient {
   private maxReconnectAttempts = 10;
   private reconnectDelay = 3000;
   private isConnecting = false;
+  private lastMessageTime = 0;
+  private messageCheckInterval?: NodeJS.Timeout;
 
   constructor(serverUrl: string = 'ws://localhost:3000') {
     this.deviceId = uuidv4();
     this.serverUrl = serverUrl;
+    this.lastMessageTime = Date.now();
   }
 
   async register(name: string = 'iPhone') {
@@ -68,11 +71,12 @@ class MobileDispatchClient {
     return new Promise<void>((resolve, reject) => {
       const attemptConnection = () => {
         try {
-          const wsUrl = `${this.serverUrl}?deviceId=${this.deviceId}&type=mobile`;
+          const wsUrl = `${this.serverUrl}?deviceId=${this.deviceId}`;
           this.ws = new WebSocket(wsUrl);
 
           const timeout = setTimeout(() => {
             this.ws?.terminate();
+            reject(new Error('Connection timeout'));
           }, 10000);
 
           this.ws.on('open', () => {
@@ -80,11 +84,14 @@ class MobileDispatchClient {
             console.log('✓ Mobile connected to Dispatch server');
             this.reconnectAttempts = 0;
             this.isConnecting = false;
+            this.lastMessageTime = Date.now();
+            this.startConnectionMonitor();
             resolve();
           });
 
           this.ws.on('message', (data) => {
             try {
+              this.lastMessageTime = Date.now();
               const message = JSON.parse(data.toString());
               this.handleMessage(message);
             } catch (e) {
@@ -101,6 +108,7 @@ class MobileDispatchClient {
             clearTimeout(timeout);
             console.log('✗ Mobile disconnected from Dispatch server');
             this.isConnecting = false;
+            this.stopConnectionMonitor();
             this.attemptReconnect();
           });
         } catch (error) {
@@ -111,6 +119,26 @@ class MobileDispatchClient {
 
       attemptConnection();
     });
+  }
+
+  private startConnectionMonitor() {
+    this.stopConnectionMonitor();
+    this.messageCheckInterval = setInterval(() => {
+      const timeSinceLastMessage = Date.now() - this.lastMessageTime;
+      if (timeSinceLastMessage > 120000) {
+        console.warn('No messages received for 2 minutes, reconnecting...');
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.close();
+        }
+      }
+    }, 30000);
+  }
+
+  private stopConnectionMonitor() {
+    if (this.messageCheckInterval) {
+      clearInterval(this.messageCheckInterval);
+      this.messageCheckInterval = undefined;
+    }
   }
 
   private attemptReconnect() {
@@ -129,12 +157,15 @@ class MobileDispatchClient {
   }
 
   private handleMessage(message: Record<string, unknown>) {
-    const { type, from, content } = message;
+    const { type, from, fromDeviceType, fromName, content, timestamp } = message;
 
     if (type === 'connected') {
-      console.log('Message:', content);
+      console.log('📱 Connected to Dispatch server:', content);
     } else if (type === 'command') {
-      console.log(`Received response from ${from}:`, content);
+      const deviceLabel = fromDeviceType === 'desktop' ? '🖥️ Desktop' : '📱 Mobile';
+      console.log(`${deviceLabel} (${fromName}) sent:`, content, `[${new Date(timestamp as number).toLocaleTimeString()}]`);
+    } else if (type === 'error') {
+      console.error('⚠️ Error:', message);
     }
   }
 
