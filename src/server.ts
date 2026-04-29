@@ -2,6 +2,7 @@ import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import { v4 as uuidv4 } from 'uuid';
+import { saveSession, loadSession, getAllSessions, queueMessage, flushQueue } from './session-manager';
 
 const app = express();
 const server = createServer(app);
@@ -26,6 +27,7 @@ interface Session {
   mobileId?: string;
   pairingCode: string;
   createdAt: number;
+  lastActivity: number;
   isActive: boolean;
 }
 
@@ -96,12 +98,14 @@ app.post('/api/sessions/create', (req: any, res: any) => {
   const { desktopId } = req.body;
   const sessionId = uuidv4();
   const pairingCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const now = Date.now();
 
   sessions.set(sessionId, {
     id: sessionId,
     desktopId,
     pairingCode,
-    createdAt: Date.now(),
+    createdAt: now,
+    lastActivity: now,
     isActive: true
   });
 
@@ -117,8 +121,21 @@ app.post('/api/sessions/pair', (req: any, res: any) => {
   }
 
   session.mobileId = mobileId;
+  session.lastActivity = Date.now();
+
   const desktop = devices.get(session.desktopId);
   const mobile = devices.get(mobileId);
+
+  saveSession({
+    sessionId: session.id,
+    desktopId: session.desktopId,
+    mobileId: session.mobileId,
+    pairingCode: session.pairingCode,
+    createdAt: session.createdAt,
+    lastActivity: session.lastActivity,
+    isActive: session.isActive,
+    messageQueue: []
+  });
 
   res.json({
     message: 'Pairing successful',
