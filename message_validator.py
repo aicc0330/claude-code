@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 def validate_message_content(content: Any) -> List[Dict[str, str]]:
     """
     驗證並清潔消息內容
-    移除所有空的文本塊，確保消息有效
+    移除所有空的文本塊，並移除空塊上的 cache_control
     """
     if isinstance(content, str):
         # 如果是字符串，包裝成適當格式
@@ -27,11 +27,18 @@ def validate_message_content(content: Any) -> List[Dict[str, str]]:
             if block.get("type") == "text":
                 text = block.get("text", "").strip()
                 if text:  # 只保留非空文本
-                    cleaned_blocks.append({"type": "text", "text": text})
+                    # 移除空文本上的 cache_control（根本原因修復）
+                    cleaned_block = {"type": "text", "text": text}
+                    # 只有在有實際文本時才保留 cache_control
+                    if "cache_control" in block and text:
+                        cleaned_block["cache_control"] = block["cache_control"]
+                    cleaned_blocks.append(cleaned_block)
             else:
                 # 保留非文本塊（圖片等）
                 if block:
-                    cleaned_blocks.append(block)
+                    # 確保非文本塊也不會有空的子內容
+                    if _has_actual_content(block):
+                        cleaned_blocks.append(block)
 
         if not cleaned_blocks:
             raise ValueError("消息必須至少包含一個非空內容塊")
@@ -39,6 +46,17 @@ def validate_message_content(content: Any) -> List[Dict[str, str]]:
         return cleaned_blocks
 
     raise ValueError(f"無效的消息內容類型: {type(content)}")
+
+
+def _has_actual_content(block: dict) -> bool:
+    """檢查塊是否有實際內容"""
+    if block.get("type") == "image":
+        return bool(block.get("source"))
+    elif block.get("type") == "tool_use":
+        return bool(block.get("id") and block.get("name"))
+    elif block.get("type") == "tool_result":
+        return bool(block.get("content") or block.get("tool_use_id"))
+    return bool(block)
 
 
 def validate_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
