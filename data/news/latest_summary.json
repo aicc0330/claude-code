@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-04-29T04:09:39.619602",
+  "top_stories": [
+    {
+      "title": "Claude 3.5 Sonnet: 性能提升 40%，成本降低 80%",
+      "url": "https://www.anthropic.com",
+      "points": 1250,
+      "source": "HackerNews",
+      "timestamp": "2026-04-29T04:09:39.618066"
+    },
+    {
+      "title": "OpenAI 推出 GPT-4 Turbo，上下文窗口擴展到 128K",
+      "url": "https://openai.com",
+      "points": 980,
+      "source": "HackerNews",
+      "timestamp": "2026-04-29T04:09:39.618074"
+    },
+    {
+      "title": "谷歌 Gemini 2.0 發佈，多模態能力再升級",
+      "url": "https://google.com",
+      "points": 750,
+      "source": "HackerNews",
+      "timestamp": "2026-04-29T04:09:39.618075"
+    }
+  ],
+  "total_stories": 3
+}
